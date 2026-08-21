@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { accessRole } from "../../access";
 
 type Row = Record<string, unknown>;
 const now = () => new Date().toISOString();
@@ -28,10 +29,11 @@ async function holdingUnits(name: string) {
   return number(subscribed?.units) - number(sold?.units) + number(bought?.units);
 }
 
-export async function GET() { try { return Response.json(await snapshot()); } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "无法读取共享账本" }, { status: 500 }); } }
+export async function GET(request: Request) { if (!await accessRole(request)) return Response.json({ error: "需要访问密码" }, { status: 401 }); try { return Response.json(await snapshot()); } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "无法读取共享账本" }, { status: 500 }); } }
 
 export async function POST(request: Request) {
   try {
+    if (await accessRole(request) !== "admin") return Response.json({ error: "需要管理员密码才能修改" }, { status: 403 });
     const { action, payload = {} } = await request.json() as { action?: string; payload?: Row };
     const db = env.DB;
     if (action === "settings:update") {
